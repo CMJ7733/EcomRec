@@ -1,0 +1,8 @@
+name: amazon_beauty
+category: Beauty
+k_core: 5
+train_ratio: 0.8
+valid_ratio: 0.1
+raw_dir: ./data/raw
+interim_dir: ./data/interim
+processed_dir: ./data/processed

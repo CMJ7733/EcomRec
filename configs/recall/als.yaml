@@ -1,0 +1,5 @@
+name: als
+factors: 64
+iterations: 50
+regularization: 0.01
+top_k: 200

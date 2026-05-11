@@ -1,0 +1,59 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+*.so
+
+# 虚拟环境
+venv/
+.venv/
+env/
+.env/
+
+# 数据（不上传原始数据）
+data/raw/
+data/interim/
+data/processed/
+*.parquet
+*.gz
+*.zip
+*.csv
+
+# 模型权重
+models/
+*.pt
+*.pth
+*.pkl
+*.joblib
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# MLflow
+mlruns/
+mlartifacts/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# 系统
+.DS_Store
+Thumbs.db
+
+# 项目文档（不上传）
+plan.md
+problem.md
+
+# 日志
+*.log
+logs/

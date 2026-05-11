@@ -1,0 +1,9 @@
+name: widedeep
+embedding_dim: 16
+dnn_hidden_units: [256, 128, 64]
+dropout: 0.3
+batch_size: 2048
+lr: 0.001
+epochs: 20
+early_stopping_patience: 3
+neg_sample_ratio: 4

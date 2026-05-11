@@ -1,0 +1,8 @@
+name: lgb
+objective: binary
+metric: auc
+num_leaves: 127
+learning_rate: 0.05
+n_estimators: 500
+early_stopping_rounds: 20
+neg_sample_ratio: 4

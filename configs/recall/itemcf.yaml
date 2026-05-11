@@ -1,0 +1,4 @@
+name: itemcf
+n_neighbors: 20
+top_k: 200
+iuf_weight: true

@@ -1,0 +1,11 @@
+defaults:
+  - data: amazon_beauty
+  - recall: itemcf
+  - rank: deepfm
+  - _self_
+
+seed: 42
+output_dir: ./models
+mlflow:
+  experiment_name: ecom_rec
+  tracking_uri: ./mlruns
