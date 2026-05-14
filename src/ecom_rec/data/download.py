@@ -11,8 +11,8 @@ from ecom_rec.utils.logger import get_logger
 log = get_logger(__name__)
 
 # Amazon Reviews 2023 官方下载地址
-REVIEW_URL = "https://datarepo.eng.ucsd.edu/mcauley_group/data/amazon_2023/raw/review_categories/Beauty_and_Personal_Care.jsonl.gz"
-META_URL = "https://datarepo.eng.ucsd.edu/mcauley_group/data/amazon_2023/raw/meta_categories/meta_Beauty_and_Personal_Care.jsonl.gz"
+REVIEW_URL = "https://mcauleylab.ucsd.edu/public_datasets/data/amazon_2023/raw/review_categories/Beauty_and_Personal_Care.jsonl.gz"
+META_URL = "https://mcauleylab.ucsd.edu/public_datasets/data/amazon_2023/raw/meta_categories/meta_Beauty_and_Personal_Care.jsonl.gz"
 
 
 def _download_file(url: str, dest: Path) -> None:

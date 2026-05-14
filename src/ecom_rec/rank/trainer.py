@@ -7,9 +7,11 @@ import numpy as np
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader, TensorDataset
-from torch.cuda.amp import GradScaler, autocast
+from torch.amp import GradScaler, autocast
+from tqdm.auto import tqdm
 
 from ecom_rec.eval.rank_metrics import compute_auc, compute_logloss
+from ecom_rec.utils.device import pick_device
 from ecom_rec.utils.logger import get_logger
 from ecom_rec.utils.seed import set_seed
 
@@ -60,14 +62,16 @@ def train_epoch(
     criterion: nn.Module,
     device: torch.device,
     scaler: GradScaler | None,
+    desc: str = "train",
 ) -> float:
     model.train()
     total_loss = 0.0
-    for dense, sparse, labels in loader:
+    pbar = tqdm(loader, desc=desc, leave=False, unit="batch")
+    for dense, sparse, labels in pbar:
         dense, sparse, labels = dense.to(device), sparse.to(device), labels.to(device)
         optimizer.zero_grad()
         if scaler is not None:
-            with autocast():
+            with autocast(device_type="cuda"):
                 preds = model(dense, sparse).squeeze(-1)
                 loss = criterion(preds, labels)
             scaler.scale(loss).backward()
@@ -79,6 +83,7 @@ def train_epoch(
             loss.backward()
             optimizer.step()
         total_loss += loss.item()
+        pbar.set_postfix(loss=f"{loss.item():.4f}")
     return total_loss / len(loader)
 
 
@@ -91,7 +96,7 @@ def evaluate(
     """返回 (AUC, LogLoss)"""
     model.eval()
     all_preds, all_labels = [], []
-    for dense, sparse, labels in loader:
+    for dense, sparse, labels in tqdm(loader, desc="eval", leave=False, unit="batch"):
         dense, sparse = dense.to(device), sparse.to(device)
         preds = torch.sigmoid(model(dense, sparse)).squeeze(-1).cpu().numpy()
         all_preds.append(preds)
@@ -122,14 +127,14 @@ def train_model(
         history dict，含 train_loss, val_auc, val_logloss 列表
     """
     set_seed(random_state)
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = pick_device()
     log.info(f"训练设备：{device}")
 
     model = model.to(device)
     criterion = nn.BCEWithLogitsLoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=1, factor=0.5)
-    scaler = GradScaler() if (use_amp and device.type == "cuda") else None
+    scaler = GradScaler(device="cuda") if (use_amp and device.type == "cuda") else None
     early_stop = EarlyStopping(patience=patience)
 
     # 构建 DataLoader
@@ -143,7 +148,8 @@ def train_model(
     history = {"train_loss": [], "val_auc": [], "val_logloss": []}
 
     for epoch in range(1, epochs + 1):
-        train_loss = train_epoch(model, train_loader, optimizer, criterion, device, scaler)
+        train_loss = train_epoch(model, train_loader, optimizer, criterion, device, scaler,
+                                  desc=f"epoch {epoch}/{epochs}")
         val_auc, val_logloss = evaluate(model, val_loader, device)
         scheduler.step(val_logloss)
 

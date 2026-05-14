@@ -10,6 +10,7 @@ import torch
 
 from ecom_rec.pipeline.multi_recall import MultiRecall
 from ecom_rec.pipeline.rerank import mmr_rerank
+from ecom_rec.utils.device import pick_device
 from ecom_rec.utils.logger import get_logger
 
 log = get_logger(__name__)
@@ -61,10 +62,7 @@ class Recommender:
         self._item_meta = {r["item_id"]: r for r in item_meta.iter_rows(named=True)}
         self._item_categories = {r["item_id"]: r.get("category", "") for r in item_meta.iter_rows(named=True)}
 
-        if device == "auto":
-            self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        else:
-            self.device = torch.device(device)
+        self.device = pick_device(device)
 
         if model_type == "deepfm":
             self.rank_model = self.rank_model.to(self.device).eval()

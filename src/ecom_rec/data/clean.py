@@ -1,8 +1,8 @@
 """清洗 Amazon Reviews 2023 原始数据并进行 K-core 过滤"""
 from __future__ import annotations
 
-import json
 import gzip
+import json
 from pathlib import Path
 
 import polars as pl
@@ -14,47 +14,117 @@ from ecom_rec.utils.io import write_parquet
 log = get_logger(__name__)
 
 
-def _load_reviews(gz_path: Path) -> pl.DataFrame:
-    """读取 jsonl.gz 评论文件，仅保留必要字段"""
-    records = []
+def _load_reviews(gz_path: Path, chunk_size: int = 1_000_000) -> pl.DataFrame:
+    """流式分块读取 jsonl.gz 评论文件，仅保留 4 个字段，避免一次性载入内存"""
+    user_ids: list[str] = []
+    item_ids: list[str] = []
+    ratings: list[float] = []
+    timestamps: list[int] = []
+    chunks: list[pl.DataFrame] = []
+    schema = {
+        "user_id": pl.Utf8,
+        "item_id": pl.Utf8,
+        "rating": pl.Float64,
+        "timestamp": pl.Int64,
+    }
+
+    def _flush() -> None:
+        if not user_ids:
+            return
+        chunks.append(pl.DataFrame(
+            {"user_id": user_ids, "item_id": item_ids, "rating": ratings, "timestamp": timestamps},
+            schema=schema,
+        ))
+        user_ids.clear()
+        item_ids.clear()
+        ratings.clear()
+        timestamps.clear()
+
     with gzip.open(gz_path, "rt", encoding="utf-8") as f:
-        for line in f:
+        for i, line in enumerate(f, 1):
             obj = json.loads(line)
-            records.append({
-                "user_id": obj.get("user_id", ""),
-                "item_id": obj.get("asin", ""),
-                "rating": float(obj.get("rating", 0.0)),
-                "timestamp": int(obj.get("timestamp", 0)),
-            })
-    df = pl.DataFrame(records)
+            user_ids.append(obj.get("user_id") or "")
+            item_ids.append(obj.get("asin") or "")
+            try:
+                ratings.append(float(obj.get("rating") or 0.0))
+            except (TypeError, ValueError):
+                ratings.append(0.0)
+            try:
+                timestamps.append(int(obj.get("timestamp") or 0))
+            except (TypeError, ValueError):
+                timestamps.append(0)
+            if len(user_ids) >= chunk_size:
+                _flush()
+                log.info(f"已加载 {i:,} 条评论...")
+
+    _flush()
+    df = pl.concat(chunks) if chunks else pl.DataFrame(schema=schema)
     log.info(f"加载评论：{len(df):,} 条")
     return df
 
 
-def _load_meta(gz_path: Path) -> pl.DataFrame:
-    """读取 jsonl.gz 元数据，仅保留关键字段"""
-    records = []
+def _load_meta(gz_path: Path, chunk_size: int = 200_000) -> pl.DataFrame:
+    """流式分块读取 jsonl.gz 元数据，仅保留 5 个字段"""
+    item_ids: list[str] = []
+    titles: list[str] = []
+    brands: list[str] = []
+    categories: list[str] = []
+    prices: list[float | None] = []
+    chunks: list[pl.DataFrame] = []
+    schema = {
+        "item_id": pl.Utf8,
+        "title": pl.Utf8,
+        "brand": pl.Utf8,
+        "category": pl.Utf8,
+        "price": pl.Float64,
+    }
+
+    def _flush() -> None:
+        if not item_ids:
+            return
+        chunks.append(pl.DataFrame(
+            {"item_id": item_ids, "title": titles, "brand": brands, "category": categories, "price": prices},
+            schema=schema,
+        ))
+        item_ids.clear()
+        titles.clear()
+        brands.clear()
+        categories.clear()
+        prices.clear()
+
     with gzip.open(gz_path, "rt", encoding="utf-8") as f:
-        for line in f:
+        for i, line in enumerate(f, 1):
             obj = json.loads(line)
-            # 安全提取 category（可能是嵌套列表）
-            cats = obj.get("categories", [])
-            category = cats[0] if cats else ""
-            if isinstance(category, list):
-                category = category[0] if category else ""
-            price_raw = obj.get("price", None)
+
+            # category: 优先 main_category，否则取 categories 列表第一项
+            cat = obj.get("main_category")
+            if not cat:
+                cats = obj.get("categories") or []
+                cat = cats[0] if cats else ""
+                if isinstance(cat, list):
+                    cat = cat[0] if cat else ""
+
+            # price 清洗
+            price_raw = obj.get("price")
+            price: float | None
             try:
                 price = float(str(price_raw).replace("$", "").replace(",", "")) if price_raw else None
-            except ValueError:
+            except (TypeError, ValueError):
                 price = None
-            records.append({
-                "item_id": obj.get("parent_asin", obj.get("asin", "")),
-                "title": str(obj.get("title", ""))[:200],
-                "brand": str(obj.get("brand", "")),
-                "category": str(category),
-                "price": price,
-            })
-    df = pl.DataFrame(records).unique(subset=["item_id"])
+
+            item_ids.append(obj.get("parent_asin") or obj.get("asin") or "")
+            titles.append(str(obj.get("title") or "")[:200])
+            brands.append(str(obj.get("brand") or obj.get("store") or ""))
+            categories.append(str(cat or ""))
+            prices.append(price)
+
+            if len(item_ids) >= chunk_size:
+                _flush()
+                log.info(f"已加载 {i:,} 个商品...")
+
+    _flush()
+    df = pl.concat(chunks) if chunks else pl.DataFrame(schema=schema)
+    df = df.unique(subset=["item_id"])
     log.info(f"加载元数据：{len(df):,} 个商品")
     return df
 

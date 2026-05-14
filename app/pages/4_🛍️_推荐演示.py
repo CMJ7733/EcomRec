@@ -27,6 +27,7 @@ def load_recommender():
         from ecom_rec.pipeline.multi_recall import MultiRecall
         from ecom_rec.pipeline.recommend import Recommender
         from ecom_rec.rank.deepfm import DeepFM
+        from ecom_rec.utils.device import pick_device
 
         train = pl.read_parquet(PROCESSED / "train.parquet")
         user_map = pl.read_parquet(PROCESSED / "user_map.parquet")
@@ -70,7 +71,7 @@ def load_recommender():
             embedding_dim=16,
             dnn_hidden_units=[256, 128, 64],
         )
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        device = pick_device()
         deepfm.load_state_dict(torch.load(dfm_path, map_location=device))
 
         rec = Recommender(

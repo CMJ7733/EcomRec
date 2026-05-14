@@ -6,6 +6,9 @@ defaults:
 
 seed: 42
 output_dir: ./models
+# fast=true 时缩减训练规模（DeepFM/Wide&Deep epochs、ALS/BPR iter、LGB n_estimators），用于本地（如 M 芯片 Mac）快速验证完整链路。
+# 命令行覆盖：python scripts/02_train_recall.py fast=true
+fast: false
 mlflow:
   experiment_name: ecom_rec
   tracking_uri: ./mlruns

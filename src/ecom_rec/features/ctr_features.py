@@ -261,11 +261,20 @@ def build_ctr_features(
         f"（正:{train_feat['label'].sum():,} 负:{len(train_feat) - train_feat['label'].sum():,}）"
     )
 
-    log.info("构建验证集特征（不做额外负采样，使用原始正样本）...")
-    valid_feat = build_features_for_split(valid, include_neg=False)
+    # valid/test 同样需要负样本：AUC/LogLoss 要求至少两类标签，否则早停信号失效
+    log.info("构建验证集特征（含负采样）...")
+    valid_feat = build_features_for_split(valid, include_neg=True)
+    log.info(
+        f"验证集：{len(valid_feat):,} 条"
+        f"（正:{valid_feat['label'].sum():,} 负:{len(valid_feat) - valid_feat['label'].sum():,}）"
+    )
 
-    log.info("构建测试集特征...")
-    test_feat = build_features_for_split(test, include_neg=False)
+    log.info("构建测试集特征（含负采样）...")
+    test_feat = build_features_for_split(test, include_neg=True)
+    log.info(
+        f"测试集：{len(test_feat):,} 条"
+        f"（正:{test_feat['label'].sum():,} 负:{len(test_feat) - test_feat['label'].sum():,}）"
+    )
 
     spec = FeatureSpec(
         dense_features=DENSE_FEATURES,

@@ -103,6 +103,38 @@ make app
 # 浏览器访问 http://localhost:8501
 ```
 
+### 🪟 Windows 用户（PowerShell / CMD）
+
+Windows 默认没有 `make`，直接使用以下 Python 命令即可，按顺序执行：
+
+```powershell
+# 1. 安装依赖
+pip install -e ".[dev]"
+
+# 2. 下载并预处理数据
+python scripts/00_download_data.py
+python scripts/01_preprocess.py
+
+# 3. 训练模型（召回 + 精排）
+python scripts/02_train_recall.py
+python scripts/03_train_rank.py
+
+# 4. 启动 Dashboard（浏览器访问 http://localhost:8501）
+streamlit run app/Home.py
+
+# 5. 跑测试
+pytest -v tests/
+
+# 6. 代码检查
+ruff check src/ tests/ scripts/
+ruff format --check src/ tests/ scripts/
+
+# 7. 清理缓存
+Get-ChildItem -Recurse -Filter "__pycache__" -Directory | Remove-Item -Recurse -Force
+Get-ChildItem -Recurse -Filter "*.pyc" | Remove-Item -Force
+Remove-Item -Recurse -Force .pytest_cache, .ruff_cache, mlruns -ErrorAction SilentlyContinue
+```
+
 ## 📊 实验结果
 
 > 结果将在模型训练完成后更新
