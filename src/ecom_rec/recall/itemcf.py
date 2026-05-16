@@ -4,6 +4,8 @@ from __future__ import annotations
 import numpy as np
 import polars as pl
 from collections import defaultdict
+from scipy.sparse import csr_matrix
+from scipy.sparse.linalg import norm as sparse_norm
 
 from ecom_rec.recall.base import Recaller
 from ecom_rec.utils.logger import get_logger
@@ -33,42 +35,77 @@ class ItemCFRecaller(Recaller):
             pl.col("timestamp_sec").alias("ts")
         ).iter_rows(named=True):
             uid = row["user_id"]
-            # 按时间排序（最近的放后面）
             pairs = sorted(zip(row["ts"], row["items"]))
             user_items[uid] = [item for _, item in pairs]
         self._user_history = user_items
 
-        # 统计商品热度（用于 IUF）
+        # 统计商品热度
         item_pop: dict[str, int] = defaultdict(int)
         for items in user_items.values():
             for item in items:
                 item_pop[item] += 1
         self._item_pop = dict(item_pop)
 
-        # 构建商品共现矩阵
-        co_occur: dict[str, dict[str, float]] = defaultdict(lambda: defaultdict(float))
+        # 向量化构建共现矩阵（稀疏矩阵乘法）
+        all_items = sorted(item_pop.keys())
+        item_to_idx = {item: idx for idx, item in enumerate(all_items)}
+        n_items = len(all_items)
 
-        for uid, items in user_items.items():
-            # IUF 权重：活跃用户贡献降低
+        # 构建稀疏用户-商品矩阵（带 IUF 权重）
+        uid_list = list(user_items.keys())
+        rows, cols, vals = [], [], []
+        for row_idx, (uid, items) in enumerate(user_items.items()):
             iuf_weight = 1.0 / np.log1p(len(items)) if self.use_iuf else 1.0
-            item_set = list(set(items))
-            for i in range(len(item_set)):
-                for j in range(i + 1, len(item_set)):
-                    a, b = item_set[i], item_set[j]
-                    co_occur[a][b] += iuf_weight
-                    co_occur[b][a] += iuf_weight
+            seen = set()
+            for item in items:
+                if item not in seen:
+                    cols.append(item_to_idx[item])
+                    rows.append(row_idx)
+                    vals.append(iuf_weight)
+                    seen.add(item)
 
-        # 归一化（余弦相似度）
+        X = csr_matrix((vals, (rows, cols)), shape=(len(uid_list), n_items))
+        log.info(f"ItemCF 稀疏矩阵构建完成：{X.shape}，计算共现矩阵 ...")
+
+        # 稀疏共现矩阵 X^T @ X，保持稀疏
+        co_occur_sparse = X.T @ X
+
+        # 余弦归一化：对角线开根号
+        diag = np.sqrt(np.asarray(co_occur_sparse.diagonal()).flatten())
+        diag[diag == 0] = 1.0
+
+        # 提取 top-K 近邻（逐行处理稀疏矩阵）
         item_sim: dict[str, list[tuple[str, float]]] = {}
-        for item_a, neighbors in co_occur.items():
-            norm_a = np.sqrt(item_pop.get(item_a, 1))
-            sims = []
-            for item_b, cnt in neighbors.items():
-                norm_b = np.sqrt(item_pop.get(item_b, 1))
-                sim = cnt / (norm_a * norm_b + 1e-9)
-                sims.append((item_b, sim))
-            sims.sort(key=lambda x: -x[1])
-            item_sim[item_a] = sims[:self.n_neighbors]
+        for i in range(n_items):
+            row_start = co_occur_sparse.indptr[i]
+            row_end = co_occur_sparse.indptr[i + 1]
+            if row_start == row_end:
+                continue
+            indices = co_occur_sparse.indices[row_start:row_end]
+            data = co_occur_sparse.data[row_start:row_end].copy()
+            if len(data) == 0:
+                continue
+
+            # 余弦归一化
+            norm_i = diag[i]
+            data /= (norm_i * diag[indices] + 1e-9)
+
+            # 排除自身
+            mask = indices != i
+            indices = indices[mask]
+            data = data[mask]
+
+            if len(data) == 0:
+                continue
+
+            # top-K
+            k = min(self.n_neighbors, len(data))
+            if k < len(data):
+                top_k_idx = np.argpartition(data, -k)[-k:]
+            else:
+                top_k_idx = np.arange(len(data))
+            top_k_idx = top_k_idx[np.argsort(data[top_k_idx])[::-1]]
+            item_sim[all_items[i]] = [(all_items[indices[j]], float(data[j])) for j in top_k_idx]
 
         self._item_sim = item_sim
         log.info(f"ItemCF 训练完成：{len(item_sim):,} 个商品有相似列表")

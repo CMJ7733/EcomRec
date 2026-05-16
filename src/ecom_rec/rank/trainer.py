@@ -49,8 +49,12 @@ def prepare_tensors(
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     """将 polars DataFrame 转为 (dense_tensor, sparse_tensor, label_tensor)"""
     import polars as pl
-    dense = torch.tensor(df.select(dense_features).to_numpy(), dtype=torch.float32)
-    sparse = torch.tensor(df.select(sparse_features).to_numpy(), dtype=torch.long)
+    dense_arr = df.select(dense_features).to_numpy()
+    dense_arr = np.nan_to_num(dense_arr, nan=0.0)
+    sparse_arr = df.select(sparse_features).to_numpy()
+    sparse_arr = np.nan_to_num(sparse_arr, nan=0).astype(np.int64)
+    dense = torch.tensor(dense_arr, dtype=torch.float32)
+    sparse = torch.tensor(sparse_arr, dtype=torch.long)
     labels = torch.tensor(df["label"].to_numpy(), dtype=torch.float32)
     return dense, sparse, labels
 
@@ -119,9 +123,13 @@ def train_model(
     use_amp: bool = True,
     save_path: str | None = None,
     random_state: int = 42,
+    sample_ratio: float = 1.0,
 ) -> dict[str, list[float]]:
     """
     训练深度排序模型。
+
+    Args:
+        sample_ratio: 训练集下采样比例，如 0.1 表示只用 10% 数据训练，加速调试。
 
     Returns:
         history dict，含 train_loss, val_auc, val_logloss 列表
@@ -137,13 +145,22 @@ def train_model(
     scaler = GradScaler(device="cuda") if (use_amp and device.type == "cuda") else None
     early_stop = EarlyStopping(patience=patience)
 
+    # 训练集下采样
+    if sample_ratio < 1.0:
+        import polars as pl
+        n = len(train_df)
+        n_sample = max(int(n * sample_ratio), 1)
+        train_df = train_df.sample(n=n_sample, seed=random_state)
+        log.info(f"训练集下采样：{n:,} → {len(train_df):,}（比例={sample_ratio}）")
+
     # 构建 DataLoader
     train_dense, train_sparse, train_labels = prepare_tensors(train_df, dense_features, sparse_features)
     val_dense, val_sparse, val_labels = prepare_tensors(valid_df, dense_features, sparse_features)
+    pin = device.type == "cuda"
     train_loader = DataLoader(TensorDataset(train_dense, train_sparse, train_labels),
-                              batch_size=batch_size, shuffle=True, num_workers=0, pin_memory=(device.type == "cuda"))
+                              batch_size=batch_size, shuffle=True, num_workers=4, pin_memory=pin)
     val_loader = DataLoader(TensorDataset(val_dense, val_sparse, val_labels),
-                            batch_size=batch_size * 2, shuffle=False, num_workers=0)
+                            batch_size=batch_size * 2, shuffle=False, num_workers=4, pin_memory=pin)
 
     history = {"train_loss": [], "val_auc": [], "val_logloss": []}
 

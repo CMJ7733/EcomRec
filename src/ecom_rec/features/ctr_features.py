@@ -118,6 +118,21 @@ def build_ctr_features(
     uid_map = {row[0]: row[1] for row in user_map.iter_rows()}
     iid_map = {row[0]: row[1] for row in item_map.iter_rows()}
     all_item_ids = list(iid_map.keys())
+    train_items_set = set(train["item_id"].unique().to_list())
+    train_item_ids = [iid for iid in all_item_ids if iid in train_items_set]
+
+    # 商品元数据查找表（用于负采样时填充真实 category/brand/price）
+    item_meta_cols = [c for c in ["category", "brand", "price"] if c in train.columns]
+    if item_meta_cols:
+        item_meta_df = train.group_by("item_id").agg(
+            [pl.col(c).first().alias(c) for c in item_meta_cols]
+        )
+        item_meta_dict: dict = {
+            row[0]: {c: row[i + 1] for i, c in enumerate(item_meta_cols)}
+            for row in item_meta_df.iter_rows()
+        }
+    else:
+        item_meta_dict = {}
 
     DENSE_FEATURES = [
         "user_avg_rating", "user_frequency", "user_active_days",
@@ -131,6 +146,7 @@ def build_ctr_features(
         for c in needed_cols:
             if c not in df.columns:
                 df = df.with_columns(pl.lit(0).alias(c))
+        df = df.with_columns((pl.col("weekday").cast(pl.Int8) - 1).clip(0, 6), pl.col("hour").cast(pl.Int8).clip(0, 23))
         return df.select(needed_cols)
 
     # ---- 3. 特征构建函数 ----
@@ -148,6 +164,7 @@ def build_ctr_features(
         if "price" in pos.columns and price_quantiles is not None:
             pos = pos.with_columns(
                 pl.col("price").map_elements(price_to_quantile, return_dtype=pl.Float64)
+                .fill_null(0.5)
                 .alias("item_price_quantile")
             )
         else:
@@ -181,6 +198,7 @@ def build_ctr_features(
             pl.col("user_active_days").fill_null(0.0),
             pl.col("item_avg_rating").fill_null(4.0),
             pl.col("item_review_count").fill_null(1),
+            pl.col("item_price_quantile").fill_null(0.5),
             pl.col("user_idx").fill_null(0),
             pl.col("item_idx").fill_null(0),
         ])
@@ -205,8 +223,9 @@ def build_ctr_features(
             sampled = 0
             attempts = 0
             while sampled < neg_sample_ratio and attempts < neg_sample_ratio * 20:
-                neg_item = random.choice(all_item_ids)
+                neg_item = random.choice(train_item_ids)
                 if neg_item not in history:
+                    meta = item_meta_dict.get(neg_item, {})
                     neg_records.append({
                         "user_id": uid,
                         "item_id": neg_item,
@@ -214,6 +233,9 @@ def build_ctr_features(
                         "timestamp_sec": row.get("timestamp_sec", 0),
                         "weekday": row.get("weekday", 0),
                         "hour": row.get("hour", 0),
+                        "category": meta.get("category"),
+                        "brand": meta.get("brand"),
+                        "price": meta.get("price"),
                     })
                     sampled += 1
                 attempts += 1
@@ -243,11 +265,37 @@ def build_ctr_features(
                 pl.col("item_review_count").fill_null(1),
                 pl.col("user_idx").fill_null(0),
                 pl.col("item_idx").fill_null(0),
-                pl.lit(0.5).alias("item_price_quantile"),
-                pl.lit(0).cast(pl.Int32).alias("category_idx"),
-                pl.lit(0).cast(pl.Int32).alias("brand_idx"),
                 pl.lit(0).cast(pl.Int8).alias("label"),
             ])
+
+            # 价格分位（与正样本相同逻辑）
+            if "price" in neg_feat.columns and price_quantiles is not None:
+                neg_feat = neg_feat.with_columns(
+                    pl.col("price").map_elements(price_to_quantile, return_dtype=pl.Float64)
+                    .fill_null(0.5)
+                    .alias("item_price_quantile")
+                )
+            else:
+                neg_feat = neg_feat.with_columns(pl.lit(0.5).alias("item_price_quantile"))
+
+            # 类目 / 品牌索引（与正样本相同逻辑）
+            if "category" in neg_feat.columns:
+                neg_feat = neg_feat.with_columns(
+                    pl.col("category").fill_null("").map_elements(
+                        lambda c: cat_map.get(str(c), 0), return_dtype=pl.Int32
+                    ).alias("category_idx")
+                )
+            else:
+                neg_feat = neg_feat.with_columns(pl.lit(0).cast(pl.Int32).alias("category_idx"))
+
+            if "brand" in neg_feat.columns:
+                neg_feat = neg_feat.with_columns(
+                    pl.col("brand").fill_null("").map_elements(
+                        lambda b: brand_map.get(str(b), 0), return_dtype=pl.Int32
+                    ).alias("brand_idx")
+                )
+            else:
+                neg_feat = neg_feat.with_columns(pl.lit(0).cast(pl.Int32).alias("brand_idx"))
             result = pl.concat([_select_feature_cols(pos), _select_feature_cols(neg_feat)])
         else:
             result = _select_feature_cols(pos)

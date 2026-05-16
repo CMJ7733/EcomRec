@@ -71,7 +71,7 @@ class ALSRecaller(Recaller):
             random_state=self.random_state,
             use_gpu=self.use_gpu,
         )
-        self._model.fit(user_item)
+        self._model.fit(user_item, show_progress=True)
         log.info(f"ALSRecaller 训练完成：{len(users):,} 用户 × {len(items):,} 商品")
         return self
 

@@ -44,10 +44,12 @@ def _load_cfg() -> OmegaConf:
 def _apply_fast_overrides(cfg: OmegaConf) -> None:
     if not cfg.get("fast", False):
         return
-    log.info("[fast] 模式开启：缩减 epoch/n_estimators")
+    log.info("[fast] 模式开启：缩减 epoch/n_estimators，训练集下采样")
     cfg.rank_cfgs.lgb.n_estimators = 100
     cfg.rank_cfgs.deepfm.epochs = 5
     cfg.rank_cfgs.widedeep.epochs = 5
+    if "sample_ratio" not in cfg:
+        cfg.sample_ratio = 0.1
 
 
 def _ensure_ctr_features(seed: int) -> tuple[pl.DataFrame, pl.DataFrame, pl.DataFrame, dict]:
@@ -96,16 +98,22 @@ def _evaluate_on_test(model_name: str, predictor, test_df: pl.DataFrame) -> dict
 
 
 def _predict_torch(model: torch.nn.Module, device: torch.device,
-                   dense_features: list[str], sparse_features: list[str]):
-    """返回一个闭包，接收 DataFrame → 输出 sigmoid 后概率数组"""
+                   dense_features: list[str], sparse_features: list[str],
+                   batch_size: int = 8192):
+    """返回一个闭包，接收 DataFrame → 分批推理输出 sigmoid 后概率数组"""
     model.eval()
 
     @torch.no_grad()
     def _predictor(df: pl.DataFrame) -> np.ndarray:
         dense_t, sparse_t, _ = prepare_tensors(df, dense_features, sparse_features)
         dense_t, sparse_t = dense_t.to(device), sparse_t.to(device)
-        logits = model(dense_t, sparse_t).squeeze(-1).cpu().numpy()
-        return 1.0 / (1.0 + np.exp(-logits))
+        all_preds = []
+        for i in range(0, len(dense_t), batch_size):
+            batch_dense = dense_t[i:i + batch_size]
+            batch_sparse = sparse_t[i:i + batch_size]
+            logits = model(batch_dense, batch_sparse).squeeze(-1)
+            all_preds.append(torch.sigmoid(logits).cpu().numpy())
+        return np.concatenate(all_preds)
 
     return _predictor
 
@@ -163,6 +171,7 @@ def main() -> None:
         use_amp=dfm_cfg.use_amp,
         save_path=str(output_dir / "deepfm.pt"),
         random_state=seed,
+        sample_ratio=cfg.get("sample_ratio", 1.0),
     )
     deepfm = deepfm.to(device)
     dfm_metrics = _evaluate_on_test(
@@ -193,6 +202,7 @@ def main() -> None:
         use_amp=False,
         save_path=str(output_dir / "widedeep.pt"),
         random_state=seed,
+        sample_ratio=cfg.get("sample_ratio", 1.0),
     )
     widedeep = widedeep.to(device)
     wd_metrics = _evaluate_on_test(
@@ -209,6 +219,15 @@ def main() -> None:
     bench_path.parent.mkdir(parents=True, exist_ok=True)
     bench_path.write_text(json.dumps(results, ensure_ascii=False, indent=2))
     log.info(f"排序基准已写入：{bench_path}")
+
+    # 6. 保存辅助文件（供 Streamlit 可视化使用）
+    lgb_fi_path = Path("reports/lgb_feature_importance.json")
+    lgb_fi_path.write_text(json.dumps(lgb_fi, ensure_ascii=False, indent=2))
+    log.info(f"LightGBM 特征重要度已写入：{lgb_fi_path}")
+
+    dfm_hist_path = Path("reports/deepfm_history.json")
+    dfm_hist_path.write_text(json.dumps(dfm_history, ensure_ascii=False, indent=2))
+    log.info(f"DeepFM 训练曲线已写入：{dfm_hist_path}")
 
     # 6. 自动回写报告/README
     try:

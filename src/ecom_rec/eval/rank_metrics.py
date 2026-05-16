@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import numpy as np
+import polars as pl
 from sklearn.metrics import roc_auc_score, log_loss
 
 from ecom_rec.utils.logger import get_logger
@@ -30,21 +31,39 @@ def compute_gauc(
 ) -> float:
     """
     GAUC（按用户分组的 AUC 加权均值）。
-    关注用户内部排序质量，比全局 AUC 更贴近真实推荐场景。
+    使用 Mann-Whitney U 公式向量化计算，避免逐用户 Python 循环。
+
+    AUC = (U_pos) / (n_pos * n_neg)
+    其中 U_pos = sum of positive ranks - n_pos*(n_pos+1)/2
     """
+    df = pl.DataFrame({
+        "uid": user_ids,
+        "y_true": y_true,
+        "y_score": y_score,
+    })
+
+    grouped = df.group_by("uid").agg([
+        pl.col("y_true").alias("labels"),
+        pl.col("y_score").alias("scores"),
+        pl.len().alias("cnt"),
+    ])
+
     gauc_sum = 0.0
     total_weight = 0
-    for uid in np.unique(user_ids):
-        mask = user_ids == uid
-        y_t = y_true[mask]
-        y_s = y_score[mask]
-        if len(np.unique(y_t)) < 2:
-            continue  # 该用户全正或全负，跳过
-        try:
-            auc = roc_auc_score(y_t, y_s)
-            weight = mask.sum()
-            gauc_sum += auc * weight
-            total_weight += weight
-        except ValueError:
+
+    for row in grouped.iter_rows(named=True):
+        labels = np.asarray(row["labels"])
+        scores = np.asarray(row["scores"])
+        n_pos = int(labels.sum())
+        n_neg = len(labels) - n_pos
+        if n_pos == 0 or n_neg == 0:
             continue
+
+        ranks = np.argsort(np.argsort(scores)).astype(np.float64) + 1.0
+        u = ranks[labels == 1].sum() - n_pos * (n_pos + 1) / 2.0
+        auc_val = u / (n_pos * n_neg)
+        weight = len(labels)
+        gauc_sum += auc_val * weight
+        total_weight += weight
+
     return gauc_sum / total_weight if total_weight > 0 else 0.0

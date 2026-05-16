@@ -62,6 +62,20 @@ class Recommender:
         self._item_meta = {r["item_id"]: r for r in item_meta.iter_rows(named=True)}
         self._item_categories = {r["item_id"]: r.get("category", "") for r in item_meta.iter_rows(named=True)}
 
+        # 构建 category / brand → idx 映射
+        if "category" in item_meta.columns:
+            categories = sorted(item_meta["category"].drop_nulls().unique().to_list())
+            self._cat_map = {c: i + 1 for i, c in enumerate(categories)}
+            self._cat_map[""] = 0
+        else:
+            self._cat_map = {}
+        if "brand" in item_meta.columns:
+            brands = sorted(item_meta["brand"].drop_nulls().unique().to_list())
+            self._brand_map = {b: i + 1 for i, b in enumerate(brands)}
+            self._brand_map[""] = 0
+        else:
+            self._brand_map = {}
+
         self.device = pick_device(device)
 
         if model_type == "deepfm":
@@ -80,11 +94,11 @@ class Recommender:
                 "user_active_days": u_stat.get("user_active_days", 0.0),
                 "item_avg_rating": i_stat.get("item_avg_rating", 4.0),
                 "item_review_count": float(i_stat.get("item_review_count", 1)),
-                "item_price_quantile": 0.5,
+                "item_price_quantile": meta.get("item_price_quantile", 0.5),
                 "user_idx": self._uid_map.get(user_id, 0),
                 "item_idx": self._iid_map.get(item_id, 0),
-                "category_idx": 0,
-                "brand_idx": 0,
+                "category_idx": self._cat_map.get(str(meta.get("category", "")), 0) if self._cat_map else 0,
+                "brand_idx": self._brand_map.get(str(meta.get("brand", "")), 0) if self._brand_map else 0,
                 "weekday": 0,
                 "hour": 12,
                 "label": 0,
@@ -143,5 +157,5 @@ class Recommender:
             "recall_candidates": candidates,
             "ranked_top50": ranked_top50,
             "final_top10": final_top10,
-            "scores": {k: scores[k] for k in final_top10},
+            "scores": {k: scores[k] for k in ranked_top50},
         }

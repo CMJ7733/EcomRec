@@ -23,7 +23,7 @@ class DeepFM(nn.Module):
         sparse_vocab_sizes: dict[str, int],
         sparse_features: list[str],
         embedding_dim: int = 16,
-        dnn_hidden_units: list[int] = (256, 128, 64),
+        dnn_hidden_units: list[int] = [256, 128, 64],
         dropout: float = 0.3,
         l2_reg: float = 1e-5,
     ) -> None:

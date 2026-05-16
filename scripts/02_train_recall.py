@@ -2,7 +2,7 @@
 
 用法：
     python scripts/02_train_recall.py                 # 默认（生产模式）
-    python scripts/02_train_recall.py fast=true       # 快速模式（M 芯片本地）
+    python scripts/02_train_recall.py fast=true       # 快速模式（支持M 芯片本地）
 """
 from __future__ import annotations
 
@@ -29,6 +29,18 @@ log = get_logger(__name__)
 FUSION_WEIGHTS = {"itemcf": 0.35, "bpr": 0.30, "als": 0.25, "pop": 0.10}
 EVAL_K_LIST = [10, 50, 100]
 EVAL_MAX_USERS_FAST = 5000
+
+
+def _load_or_train(path: Path, recaller, train_data, label: str):
+    """pkl 已存在则加载，否则训练 + 保存"""
+    if path.exists():
+        log.info(f"加载已训练模型：{path}")
+        with open(path, "rb") as f:
+            return pickle.load(f)
+    log.info(f"== 训练 {label} ==")
+    model = recaller.fit(train_data)
+    _persist(model, path)
+    return model
 
 
 def _load_cfg() -> OmegaConf:
@@ -117,42 +129,28 @@ def main() -> None:
     # 3. 训练四路召回
     recallers: dict[str, object] = {}
 
-    log.info("== 训练 Top-Pop ==")
-    pop = PopRecaller().fit(train)
-    _persist(pop, output_dir / "pop.pkl")
-    recallers["pop"] = pop
+    recallers["pop"] = _load_or_train(output_dir / "pop.pkl", PopRecaller(), train, "Top-Pop")
 
-    log.info("== 训练 ItemCF ==")
     icf_cfg = cfg.recall_cfgs.itemcf
-    icf = ItemCFRecaller(
-        n_neighbors=icf_cfg.n_neighbors,
-        use_iuf=icf_cfg.get("iuf_weight", True),
-    ).fit(train)
-    _persist(icf, output_dir / "itemcf.pkl")
-    recallers["itemcf"] = icf
+    recallers["itemcf"] = _load_or_train(
+        output_dir / "itemcf.pkl",
+        ItemCFRecaller(n_neighbors=icf_cfg.n_neighbors, use_iuf=icf_cfg.get("iuf_weight", True)),
+        train, "ItemCF",
+    )
 
-    log.info("== 训练 BPR-MF ==")
     bpr_cfg = cfg.recall_cfgs.bpr
-    bpr = BPRRecaller(
-        factors=bpr_cfg.factors,
-        iterations=bpr_cfg.iterations,
-        learning_rate=bpr_cfg.learning_rate,
-        regularization=bpr_cfg.regularization,
-        random_state=seed,
-    ).fit(train)
-    _persist(bpr, output_dir / "bpr.pkl")
-    recallers["bpr"] = bpr
+    recallers["bpr"] = _load_or_train(
+        output_dir / "bpr.pkl",
+        BPRRecaller(factors=bpr_cfg.factors, iterations=bpr_cfg.iterations, learning_rate=bpr_cfg.learning_rate, regularization=bpr_cfg.regularization, random_state=seed),
+        train, "BPR-MF",
+    )
 
-    log.info("== 训练 ALS ==")
     als_cfg = cfg.recall_cfgs.als
-    als = ALSRecaller(
-        factors=als_cfg.factors,
-        iterations=als_cfg.iterations,
-        regularization=als_cfg.regularization,
-        random_state=seed,
-    ).fit(train)
-    _persist(als, output_dir / "als.pkl")
-    recallers["als"] = als
+    recallers["als"] = _load_or_train(
+        output_dir / "als.pkl",
+        ALSRecaller(factors=als_cfg.factors, iterations=als_cfg.iterations, regularization=als_cfg.regularization, random_state=seed),
+        train, "ALS",
+    )
 
     # 4. 评估单路
     results: dict[str, dict[str, float]] = {}

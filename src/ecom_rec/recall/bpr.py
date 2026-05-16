@@ -33,6 +33,7 @@ class BPRRecaller(Recaller):
         self._item_idx: dict[str, int] = {}
         self._idx_item: dict[int, str] = {}
         self._user_history: dict[str, set[str]] = {}
+        self._user_item_matrix = None
 
     def fit(self, interactions: pl.DataFrame) -> "BPRRecaller":
         from implicit.bpr import BayesianPersonalizedRanking
@@ -62,6 +63,7 @@ class BPRRecaller(Recaller):
         ).iter_rows(named=True):
             self._user_history[row["user_id"]] = set(row["items"])
 
+        self._user_item_matrix = user_item
         self._model = BayesianPersonalizedRanking(
             factors=self.factors,
             iterations=self.iterations,
@@ -69,7 +71,7 @@ class BPRRecaller(Recaller):
             regularization=self.regularization,
             random_state=self.random_state,
         )
-        self._model.fit(user_item)
+        self._model.fit(user_item, show_progress=True)
         log.info(f"BPRRecaller 训练完成：{len(users):,} 用户 × {len(items):,} 商品")
         return self
 
@@ -81,6 +83,6 @@ class BPRRecaller(Recaller):
         filter_items = [self._item_idx[it] for it in history if it in self._item_idx]
 
         item_ids, _ = self._model.recommend(
-            uid, None, N=k + len(filter_items), filter_already_liked_items=True
+            uid, self._user_item_matrix[uid], N=k + len(filter_items), filter_already_liked_items=True
         )
         return [self._idx_item[i] for i in item_ids if i in self._idx_item][:k]

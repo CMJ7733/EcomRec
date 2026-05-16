@@ -29,16 +29,16 @@ if rank_results is None:
     st.warning("排序评估结果尚未生成。请先运行 `notebooks/04_rank_benchmark.ipynb`。")
     # 演示模式
     rank_results = {
-        "LightGBM": {"val_auc": 0.742, "val_logloss": 0.438, "test_auc": 0.738, "test_gauc": 0.71},
-        "DeepFM":   {"val_auc": 0.768, "val_logloss": 0.421, "test_auc": 0.762, "test_gauc": 0.74},
-        "Wide&Deep":{"val_auc": 0.755, "val_logloss": 0.429, "test_auc": 0.749, "test_gauc": 0.73},
+        "LightGBM": {"AUC": 0.738, "LogLoss": 0.438, "GAUC": 0.71, "best_val_auc": 0.742},
+        "DeepFM":   {"AUC": 0.762, "LogLoss": 0.421, "GAUC": 0.74, "best_val_auc": 0.768},
+        "Wide&Deep":{"AUC": 0.749, "LogLoss": 0.429, "GAUC": 0.73, "best_val_auc": 0.755},
     }
 
 # ---- AUC 对比 ----
 st.markdown("### 模型 AUC 对比")
 df_rank = pd.DataFrame([
-    {"模型": m, "验证集 AUC": v.get("val_auc", 0), "测试集 AUC": v.get("test_auc", 0),
-     "LogLoss": v.get("val_logloss", 0), "GAUC": v.get("test_gauc", 0)}
+    {"模型": m, "验证集 AUC": v.get("best_val_auc", v.get("val_auc", 0)), "测试集 AUC": v.get("AUC", v.get("test_auc", 0)),
+     "LogLoss": v.get("LogLoss", v.get("val_logloss", 0)), "GAUC": v.get("GAUC", v.get("test_gauc", 0))}
     for m, v in rank_results.items()
 ])
 

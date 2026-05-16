@@ -1,0 +1,50 @@
+[
+  {
+    "feature": "item_review_count",
+    "importance": 6744400.09701252
+  },
+  {
+    "feature": "item_idx",
+    "importance": 65.23797035217285
+  },
+  {
+    "feature": "item_avg_rating",
+    "importance": 44.34948015213013
+  },
+  {
+    "feature": "item_price_quantile",
+    "importance": 31.082489490509033
+  },
+  {
+    "feature": "brand_idx",
+    "importance": 15.834849834442139
+  },
+  {
+    "feature": "category_idx",
+    "importance": 8.563790321350098
+  },
+  {
+    "feature": "user_avg_rating",
+    "importance": 0.0
+  },
+  {
+    "feature": "user_frequency",
+    "importance": 0.0
+  },
+  {
+    "feature": "user_active_days",
+    "importance": 0.0
+  },
+  {
+    "feature": "user_idx",
+    "importance": 0.0
+  },
+  {
+    "feature": "weekday",
+    "importance": 0.0
+  },
+  {
+    "feature": "hour",
+    "importance": 0.0
+  }
+]
