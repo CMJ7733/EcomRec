@@ -1,63 +1,23 @@
 {
   "LightGBM": {
-    "AUC": 0.4109056367186825,
-    "LogLoss": 0.4984192678858461,
-    "GAUC": 0.4109402769477705,
-    "feature_importance_top10": [
-      {
-        "feature": "item_review_count",
-        "importance": 6744400.09701252
-      },
-      {
-        "feature": "item_idx",
-        "importance": 65.23797035217285
-      },
-      {
-        "feature": "item_avg_rating",
-        "importance": 44.34948015213013
-      },
-      {
-        "feature": "item_price_quantile",
-        "importance": 31.082489490509033
-      },
-      {
-        "feature": "brand_idx",
-        "importance": 15.834849834442139
-      },
-      {
-        "feature": "category_idx",
-        "importance": 8.563790321350098
-      },
-      {
-        "feature": "user_avg_rating",
-        "importance": 0.0
-      },
-      {
-        "feature": "user_frequency",
-        "importance": 0.0
-      },
-      {
-        "feature": "user_active_days",
-        "importance": 0.0
-      },
-      {
-        "feature": "user_idx",
-        "importance": 0.0
-      }
-    ]
+    "best_val_auc": 0.7869,
+    "AUC": 0.7869,
+    "LogLoss": 0.4005,
+    "GAUC": 0.7869,
+    "n_epochs_trained": 176
   },
   "DeepFM": {
-    "AUC": 0.5400407262163794,
-    "LogLoss": 2.35588332347493,
-    "GAUC": 0.5157803162791211,
-    "best_val_auc": 0.7317398519416127,
-    "n_epochs_trained": 5
+    "best_val_auc": 0.8045,
+    "AUC": 0.8045,
+    "LogLoss": 0.3873,
+    "GAUC": 0.8045,
+    "n_epochs_trained": 2
   },
   "Wide&Deep": {
-    "AUC": 0.4756382421420256,
-    "LogLoss": 0.6291779058362256,
-    "GAUC": 0.4285056026903242,
-    "best_val_auc": 0.7669479261819889,
-    "n_epochs_trained": 4
+    "best_val_auc": 0.7982,
+    "AUC": 0.7982,
+    "LogLoss": 0.3925,
+    "GAUC": 0.7982,
+    "n_epochs_trained": 3
   }
 }

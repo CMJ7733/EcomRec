@@ -83,11 +83,15 @@ if fi_path.exists():
     with open(fi_path) as f:
         fi_data = json.load(f)
     fi_df = pd.DataFrame(fi_data).sort_values("importance", ascending=False).head(15)
-    fig_fi = px.bar(fi_df, x="importance", y="feature", orientation="h",
-                    title="Top 15 特征重要度（Gain）",
-                    color="importance", color_continuous_scale="Blues",
+    fi_df["importance_pct"] = fi_df["importance"] / fi_df["importance"].sum() * 100
+    fig_fi = px.bar(fi_df, x="importance_pct", y="feature", orientation="h",
+                    title="特征重要度（Gain 贡献率 %）",
+                    labels={"importance_pct": "Gain 贡献率 (%)", "feature": ""},
+                    color="feature",
+                    color_discrete_sequence=px.colors.qualitative.Set2,
                     template="plotly_white", height=500)
-    fig_fi.update_layout(yaxis=dict(categoryorder="total ascending"))
+    fig_fi.update_layout(yaxis=dict(categoryorder="total ascending"), showlegend=False)
+    fig_fi.update_traces(texttemplate="%{x:.1f}%", textposition="outside")
     st.plotly_chart(fig_fi, use_container_width=True)
 else:
     st.info("特征重要度数据未找到。运行 Notebook 04 后刷新。")

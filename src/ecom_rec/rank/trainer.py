@@ -157,10 +157,12 @@ def train_model(
     train_dense, train_sparse, train_labels = prepare_tensors(train_df, dense_features, sparse_features)
     val_dense, val_sparse, val_labels = prepare_tensors(valid_df, dense_features, sparse_features)
     pin = device.type == "cuda"
+    # macOS fork 多进程不稳定，非 CUDA 环境用主进程 DataLoader
+    nw = 4 if device.type == "cuda" else 0
     train_loader = DataLoader(TensorDataset(train_dense, train_sparse, train_labels),
-                              batch_size=batch_size, shuffle=True, num_workers=4, pin_memory=pin)
+                              batch_size=batch_size, shuffle=True, num_workers=nw, pin_memory=pin)
     val_loader = DataLoader(TensorDataset(val_dense, val_sparse, val_labels),
-                            batch_size=batch_size * 2, shuffle=False, num_workers=4, pin_memory=pin)
+                            batch_size=batch_size * 2, shuffle=False, num_workers=nw, pin_memory=pin)
 
     history = {"train_loss": [], "val_auc": [], "val_logloss": []}
 

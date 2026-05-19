@@ -45,7 +45,8 @@ class LGBRanker:
         dense_features: list[str],
         sparse_features: list[str],
     ) -> "LGBRanker":
-        feature_cols = dense_features + sparse_features
+        # 稀疏特征是整数 ID，专供 Embedding 查表，对树模型无意义，只用稠密特征
+        feature_cols = dense_features
         self._feature_names = feature_cols
 
         X_train = train_df.select(feature_cols).to_numpy()
