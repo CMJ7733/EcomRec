@@ -85,24 +85,38 @@ segment_stats = (
 scaler = MinMaxScaler()
 cols_to_scale = ["recency_days", "frequency", "monetary"]
 segment_stats[cols_to_scale] = scaler.fit_transform(segment_stats[cols_to_scale])
-segment_stats["recency_days"] = 1 - segment_stats["recency_days"]  # 反转：近度越小越好
+segment_stats["recency_days"] = 1 - segment_stats["recency_days"]
 
-categories = ["近度(反转)", "频度", "价值"]
+segment_stats["R_近度"] = segment_stats["recency_days"]
+segment_stats["F_频度"] = segment_stats["frequency"]
+segment_stats["M_价值"] = segment_stats["monetary"]
+segment_stats["F×M_贡献"] = (segment_stats["frequency"] + segment_stats["monetary"]) / 2
+segment_stats["R×F_活跃"] = (segment_stats["recency_days"] + segment_stats["frequency"]) / 2
+
+radar_cols = ["R_近度", "R×F_活跃", "F_频度", "F×M_贡献", "M_价值"]
+
 fig_radar = go.Figure()
 for _, row in segment_stats.iterrows():
-    vals = [row["recency_days"], row["frequency"], row["monetary"]]
+    vals = [row[c] for c in radar_cols]
     color = COLOR_MAP.get(row["user_segment"], "#888")
     fig_radar.add_trace(go.Scatterpolar(
         r=vals + [vals[0]],
-        theta=categories + [categories[0]],
+        theta=radar_cols + [radar_cols[0]],
         fill="toself",
         name=row["user_segment"],
         line_color=color,
-        opacity=0.7,
+        line_width=2.5,
+        opacity=0.15,
+        marker=dict(size=5, symbol="circle"),
     ))
 fig_radar.update_layout(
-    polar=dict(radialaxis=dict(visible=True, range=[0, 1])),
-    template="plotly_white", height=450,
+    polar=dict(
+        radialaxis=dict(visible=True, range=[0, 1.05], tickfont=dict(size=10)),
+        angularaxis=dict(tickfont=dict(size=12)),
+        bgcolor="rgba(0,0,0,0.02)",
+    ),
+    template="plotly_white", height=500,
+    legend=dict(orientation="h", yanchor="bottom", y=-0.15, xanchor="center", x=0.5),
 )
 st.plotly_chart(fig_radar, use_container_width=True)
 

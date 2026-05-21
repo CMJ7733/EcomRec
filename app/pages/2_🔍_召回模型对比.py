@@ -68,25 +68,45 @@ st.divider()
 
 # ---- 雷达图：多维度综合对比 ----
 st.markdown("### 多维度综合对比（雷达图）")
-radar_metrics = [f"HR@{k_option}", f"Recall@{k_option}", f"NDCG@{k_option}", f"Coverage@100"]
-fig_radar = go.Figure()
-colors = ["#FF9800", "#2196F3", "#4CAF50", "#9C27B0"]
-for i, (model_name, metrics) in enumerate(results.items()):
-    vals = [metrics.get(m, 0.0) for m in radar_metrics]
-    fig_radar.add_trace(go.Scatterpolar(
-        r=vals + [vals[0]],
-        theta=radar_metrics + [radar_metrics[0]],
-        fill="toself",
-        name=model_name,
-        line_color=colors[i % len(colors)],
-    ))
-fig_radar.update_layout(
-    polar=dict(radialaxis=dict(visible=True, range=[0, max(
-        max(results[m].get(k, 0) for m in results) for k in radar_metrics
-    ) * 1.2])),
-    template="plotly_white", height=450,
-)
-st.plotly_chart(fig_radar, use_container_width=True)
+radar_metrics = [
+    f"HR@10", f"HR@{k_option}", f"HR@100",
+    f"NDCG@10", f"NDCG@{k_option}", f"NDCG@100",
+    f"Recall@{k_option}", f"Coverage@100",
+]
+available_metrics = [m for m in radar_metrics if any(m in results[model] for model in results)]
+
+if available_metrics:
+    max_vals = {m: max(results[model].get(m, 0) for model in results) for m in available_metrics}
+
+    fig_radar = go.Figure()
+    colors = ["#FF9800", "#2196F3", "#4CAF50", "#9C27B0", "#00BCD4"]
+    for i, (model_name, metrics) in enumerate(results.items()):
+        raw_vals = [metrics.get(m, 0.0) for m in available_metrics]
+        norm_vals = [
+            v / max_vals[m] if max_vals[m] > 0 else 0.0
+            for v, m in zip(raw_vals, available_metrics)
+        ]
+        short_labels = [m.replace("@", "\n@") for m in available_metrics]
+        fig_radar.add_trace(go.Scatterpolar(
+            r=norm_vals + [norm_vals[0]],
+            theta=short_labels + [short_labels[0]],
+            fill="toself",
+            name=model_name,
+            line_color=colors[i % len(colors)],
+            line_width=2.5,
+            opacity=0.15,
+            marker=dict(size=6, symbol="circle"),
+        ))
+    fig_radar.update_layout(
+        polar=dict(
+            radialaxis=dict(visible=True, range=[0, 1.05], tickfont=dict(size=10)),
+            angularaxis=dict(tickfont=dict(size=11)),
+            bgcolor="rgba(0,0,0,0.02)",
+        ),
+        template="plotly_white", height=500,
+        legend=dict(orientation="h", yanchor="bottom", y=-0.15, xanchor="center", x=0.5),
+    )
+    st.plotly_chart(fig_radar, use_container_width=True)
 
 # ---- 完整指标表 ----
 st.markdown("### 完整评估指标表")

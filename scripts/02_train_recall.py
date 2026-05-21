@@ -57,13 +57,15 @@ def _load_cfg() -> OmegaConf:
 
 
 def _apply_fast_overrides(cfg: OmegaConf) -> None:
-    """fast 模式：缩减迭代次数，加快本地实验"""
+    """fast 模式：缩减迭代次数和模型规模"""
     if not cfg.get("fast", False):
         return
-    log.info("[fast] 模式开启：缩减 ALS/BPR 迭代次数")
+    log.info("[fast] 模式开启：缩减迭代次数和模型规模")
     cfg.recall_cfgs.als.iterations = 20
+    cfg.recall_cfgs.als.factors = 64
     cfg.recall_cfgs.bpr.iterations = 30
-
+    cfg.recall_cfgs.itemcf.n_neighbors = 30
+    cfg.recall_cfgs.itemcf.n_neighbors = 30 
 
 def _build_ground_truth(valid: pl.DataFrame) -> dict[str, list[str]]:
     """从 valid 构建 {user_id: [item_id, ...]} 真值字典"""

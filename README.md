@@ -152,9 +152,9 @@ Remove-Item -Recurse -Force .pytest_cache, .ruff_cache, mlruns -ErrorAction Sile
 
 | 模型 | AUC | LogLoss | GAUC |
 |------|-----|---------|------|
-| **LightGBM** | 0.4109 | 0.4984 | 0.4109 |
-| **Wide & Deep** | 0.4756 | 0.6292 | 0.4285 |
-| **DeepFM** | 0.5400 | 2.3559 | 0.5158 |
+| **LightGBM** | 0.7869 | 0.4005 | 0.7869 |
+| **Wide & Deep** | 0.7982 | 0.3925 | 0.7982 |
+| **DeepFM** | 0.8045 | 0.3873 | 0.8045 |
 
 ## 📁 项目结构
 

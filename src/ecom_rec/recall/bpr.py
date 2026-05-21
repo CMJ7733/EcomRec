@@ -54,7 +54,7 @@ class BPRRecaller(Recaller):
         cols = interactions["item_id"].map_elements(
             lambda it: self._item_idx[it], return_dtype=pl.Int32
         ).to_list()
-        data = interactions["rating"].to_list()
+        data = [1.0] * len(rows)
         user_item = sp.csr_matrix((data, (rows, cols)), shape=(len(users), len(items)))
 
         # 保存用户历史

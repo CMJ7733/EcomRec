@@ -94,6 +94,13 @@ def _evaluate_on_test(model_name: str, predictor, test_df: pl.DataFrame) -> dict
     logloss = compute_logloss(labels, preds)
     gauc = compute_gauc(labels, preds, test_df["user_idx"].to_numpy())
     log.info(f"{model_name} test: AUC={auc:.4f}  LogLoss={logloss:.4f}  GAUC={gauc:.4f}")
+
+    if abs(auc - gauc) < 0.005:
+        log.warning(
+            f"{model_name}: GAUC≈AUC ({auc:.4f} vs {gauc:.4f})，"
+            "可能因 1:4 负采样导致用户内分布趋同，将在报告中说明"
+        )
+
     return {"AUC": auc, "LogLoss": logloss, "GAUC": gauc}
 
 
