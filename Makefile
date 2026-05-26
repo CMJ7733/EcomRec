@@ -1,4 +1,4 @@
-.PHONY: install data test train train-fast figures app lint clean all
+.PHONY: install data quality test train train-fast figures app lint clean all
 
 PYTHON := python
 PIP := pip
@@ -10,6 +10,9 @@ install:
 data:
 	$(PYTHON) scripts/00_download_data.py
 	$(PYTHON) scripts/01_preprocess.py
+
+quality:
+	$(PYTHON) scripts/05_data_guardrail.py
 
 train:
 	$(PYTHON) scripts/02_train_recall.py

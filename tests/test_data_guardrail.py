@@ -64,3 +64,33 @@ def test_guardrail_profiles_price_null_ratio():
     report = run_quality_checks(train, valid, test)
     assert "price" in report["profiles"]
     assert report["profiles"]["price"]["null_ratio"] == 0.5
+
+
+def test_guardrail_detects_price_outlier_p1():
+    """price 极端异常值占比过高时，应触发 P1 告警"""
+    prices = [10.0] * 99 + [9999.0]
+    train = pl.DataFrame(
+        {
+            "timestamp_sec": list(range(100, 200)),
+            "rating": [4.0] * 100,
+            "price": prices,
+        }
+    )
+    valid = pl.DataFrame(
+        {
+            "timestamp_sec": [600],
+            "rating": [4.0],
+            "price": [10.0],
+        }
+    )
+    test = pl.DataFrame(
+        {
+            "timestamp_sec": [700],
+            "rating": [5.0],
+            "price": [20.0],
+        }
+    )
+
+    report = run_quality_checks(train, valid, test)
+    p1_messages = [a.get("message", "") for a in report["alerts"] if a.get("level") == "P1"]
+    assert any("价格异常值占比" in msg for msg in p1_messages)
