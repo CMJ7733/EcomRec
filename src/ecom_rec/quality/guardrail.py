@@ -47,10 +47,19 @@ def _add_price_outlier_alert(train: pl.DataFrame, alerts: list[dict[str, str]]) 
     if iqr > 0:
         threshold = float(q3) + 3.0 * iqr
     else:
-        p99 = price.quantile(0.99)
-        if p99 is None:
+        median = price.median()
+        if median is None:
             return
-        threshold = float(p99) * 3.0
+        median_f = float(median)
+        mad = (price - median_f).abs().median()
+        if mad is None:
+            return
+
+        mad_f = float(mad)
+        if mad_f > 0:
+            threshold = median_f + 8.0 * mad_f
+        else:
+            threshold = median_f * 2.5 if median_f > 0 else 1.0
 
     outlier_count = int((price > threshold).sum())
     outlier_ratio = float(outlier_count / len(price))
@@ -89,23 +98,23 @@ def _add_time_leakage_alert(
 
         overlap = train_user_ts.join(valid_user_ts, on="user_id", how="inner")
         if len(overlap) > 0:
-            leaked = overlap.filter(pl.col("valid_min_ts") <= pl.col("train_max_ts"))
+            leaked = overlap.filter(pl.col("valid_min_ts") < pl.col("train_max_ts"))
             if len(leaked) > 0:
                 alerts.append(
                     {
                         "level": "P0",
-                        "message": "时间切分异常：存在用户的 valid 时间早于或等于 train 末尾时间。",
+                        "message": "时间切分异常：存在用户的 valid 时间早于 train 末尾时间。",
                     }
                 )
         return
 
     train_ts = train["timestamp_sec"].drop_nulls()
     valid_ts = valid["timestamp_sec"].drop_nulls()
-    if len(train_ts) > 0 and len(valid_ts) > 0 and valid_ts.min() <= train_ts.max():
+    if len(train_ts) > 0 and len(valid_ts) > 0 and valid_ts.min() < train_ts.max():
         alerts.append(
             {
                 "level": "P0",
-                "message": "时间切分异常：valid 起始时间不应早于或等于 train 结束时间。",
+                "message": "时间切分异常：valid 起始时间不应早于 train 结束时间。",
             }
         )
 

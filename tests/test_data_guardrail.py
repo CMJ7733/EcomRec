@@ -128,6 +128,35 @@ def test_guardrail_no_time_leakage_alert_when_per_user_order_ok():
     assert not any("时间切分" in msg for msg in p0_messages)
 
 
+def test_guardrail_equal_timestamp_should_not_trigger_p0():
+    """时间戳相等视为可接受，不应触发 P0。"""
+    train = pl.DataFrame(
+        {
+            "timestamp_sec": [100, 200],
+            "rating": [4.0, 5.0],
+            "price": [10.0, 20.0],
+        }
+    )
+    valid = pl.DataFrame(
+        {
+            "timestamp_sec": [200],  # 与 train 最大时间相等
+            "rating": [3.0],
+            "price": [15.0],
+        }
+    )
+    test = pl.DataFrame(
+        {
+            "timestamp_sec": [300],
+            "rating": [4.0],
+            "price": [30.0],
+        }
+    )
+
+    report = run_quality_checks(train, valid, test)
+    p0_messages = [a.get("message", "") for a in report["alerts"] if a.get("level") == "P0"]
+    assert not any("时间切分" in msg for msg in p0_messages)
+
+
 def test_guardrail_price_outlier_ratio_boundary():
     """异常值占比边界：==0.005 不告警，>0.005 告警。"""
     train_equal = pl.DataFrame(
@@ -162,3 +191,32 @@ def test_guardrail_price_outlier_ratio_boundary():
     report_higher = run_quality_checks(train_higher, valid, test)
     p1_messages_higher = [a.get("message", "") for a in report_higher["alerts"] if a.get("level") == "P1"]
     assert any("价格异常值占比" in msg for msg in p1_messages_higher)
+
+
+def test_guardrail_iqr_zero_with_two_percent_outliers_should_alert():
+    """IQR=0 时，2% 极端值也应通过回退阈值触发 P1。"""
+    train = pl.DataFrame(
+        {
+            "timestamp_sec": list(range(100, 200)),
+            "rating": [4.0] * 100,
+            "price": [10.0] * 98 + [1000.0, 1000.0],  # 2/100 = 2%
+        }
+    )
+    valid = pl.DataFrame(
+        {
+            "timestamp_sec": [10000],
+            "rating": [4.0],
+            "price": [10.0],
+        }
+    )
+    test = pl.DataFrame(
+        {
+            "timestamp_sec": [11000],
+            "rating": [5.0],
+            "price": [20.0],
+        }
+    )
+
+    report = run_quality_checks(train, valid, test)
+    p1_messages = [a.get("message", "") for a in report["alerts"] if a.get("level") == "P1"]
+    assert any("价格异常值占比" in msg for msg in p1_messages)
