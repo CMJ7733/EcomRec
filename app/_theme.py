@@ -11,6 +11,9 @@ def apply_theme() -> None:
     """加载并注入统一主题 CSS。"""
     css_path = Path(__file__).parent / "static" / "theme.css"
     if not css_path.exists():
+        if not st.session_state.get("_theme_css_missing_warned", False):
+            st.warning(f"主题样式文件缺失：{css_path}")
+            st.session_state["_theme_css_missing_warned"] = True
         return
 
     css_text = css_path.read_text(encoding="utf-8")

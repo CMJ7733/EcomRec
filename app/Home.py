@@ -28,6 +28,16 @@ PROCESSED = Path("data/processed")
 quality_path = REPORTS / "data_quality_report.json"
 coverage_path = REPORTS / "image_coverage_report.json"
 
+# 轻量状态占位：确保关键报告路径可见且被实际使用
+quality_ready = quality_path.exists()
+coverage_ready = coverage_path.exists()
+st.caption(
+    "资产状态 · 数据质量报告："
+    f"{'已就绪' if quality_ready else '未生成'}"
+    " · 图片覆盖报告："
+    f"{'已就绪' if coverage_ready else '未生成'}"
+)
+
 # ---- 关键数字概览 ----
 st.markdown("### 📊 系统概览")
 col1, col2, col3, col4, col5 = st.columns(5)
