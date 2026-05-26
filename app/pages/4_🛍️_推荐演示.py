@@ -27,6 +27,7 @@ PROCESSED = Path("data/processed")
 MODELS_DIR = Path("models")
 IMAGES_DIR = Path("app/static/images")
 MAPPING_PATH = IMAGES_DIR / "mapping.json"
+COVERAGE_REPORT_PATH = Path("reports/image_coverage_report.json")
 
 CATEGORY_COLORS = {
     "Skin Care": "#4CAF50",
@@ -96,17 +97,25 @@ def _generate_avatar(item_id: str, category: str = "", size: int = 120) -> Image
     return img
 
 
+def _resolve_local_image(item_id: str) -> str | None:
+    img_file = IMAGES_DIR / f"{item_id}.jpg"
+    if img_file.is_file():
+        return str(img_file.resolve())
+    return None
+
+
 def _show_item_image(item_id: str, category: str = "", width: int = 60):
     category = category or ""
-    img_file = IMAGES_DIR / f"{item_id}.jpg"
-    if img_file.exists():
-        st.image(str(img_file.resolve()), width=width)
-    else:
-        avatar = _generate_avatar(item_id, category)
-        buf = BytesIO()
-        avatar.save(buf, format="PNG")
-        buf.seek(0)
-        st.image(buf, width=width)
+    local_image = _resolve_local_image(item_id)
+    if local_image:
+        st.image(local_image, width=width)
+        return
+
+    avatar = _generate_avatar(item_id, category)
+    buf = BytesIO()
+    avatar.save(buf, format="PNG")
+    buf.seek(0)
+    st.image(buf, width=width)
 
 
 @st.cache_data
@@ -115,6 +124,17 @@ def load_item_mapping():
         with open(MAPPING_PATH, "r", encoding="utf-8") as f:
             return json.load(f)
     return {}
+
+
+@st.cache_data
+def load_image_coverage_report():
+    if not COVERAGE_REPORT_PATH.exists():
+        return None
+    try:
+        with open(COVERAGE_REPORT_PATH, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return None
 
 
 @st.cache_data
@@ -289,8 +309,20 @@ if recommender is None:
 user_history = user_history_or_error if isinstance(user_history_or_error, dict) else {}
 img_mapping = load_item_mapping()
 meta_mapping = load_item_meta()
+coverage_report = load_image_coverage_report()
 
 st.success("推荐引擎已就绪！")
+if coverage_report:
+    total = int(coverage_report.get("target_total", 0) or 0)
+    success = int(coverage_report.get("success", 0) or 0)
+    coverage = float(coverage_report.get("coverage", 0.0) or 0.0)
+    st.info(
+        f"🖼️ 离线图片覆盖率：{coverage * 100:.2f}%（{success}/{total}）。"
+        "图片优先使用本地静态资源，缺失时回退为占位图。"
+    )
+else:
+    st.warning("未找到图片覆盖率报告，建议先构建离线图片库。")
+    st.code("conda run -n data python scripts/06_build_image_bank.py --top-n 30000", language="bash")
 
 st.divider()
 col1, col2 = st.columns([2, 1])
