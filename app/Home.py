@@ -1,16 +1,20 @@
 """Streamlit Dashboard 主入口（增强版）"""
-import sys
-sys.path.insert(0, "src")
-import streamlit as st
-from pathlib import Path
 import json
+import sys
+from pathlib import Path
+
 import polars as pl
+import streamlit as st
+from _theme import apply_theme
+
+sys.path.insert(0, "src")
 
 st.set_page_config(
     page_title="EcomRec — 电商推荐系统",
     page_icon="🛍️",
     layout="wide",
 )
+apply_theme()
 
 st.title("🛍️ EcomRec — 电商用户行为分析与深度混合推荐系统")
 st.markdown("""
@@ -19,6 +23,10 @@ st.markdown("""
 
 REPORTS = Path("reports")
 PROCESSED = Path("data/processed")
+
+# 预留：数据质量与补图覆盖报告路径（后续看板接入）
+quality_path = REPORTS / "data_quality_report.json"
+coverage_path = REPORTS / "image_coverage_report.json"
 
 # ---- 关键数字概览 ----
 st.markdown("### 📊 系统概览")

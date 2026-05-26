@@ -1,0 +1,43 @@
+:root {
+  --bg: #f3f6fb;
+  --panel: #ffffff;
+  --ink: #142033;
+  --accent: #0f5bd8;
+  --ok: #1f9d63;
+  --warn: #b67906;
+  --danger: #cf3e3e;
+  --line: rgba(20, 32, 51, 0.12);
+  --shadow: 0 12px 36px rgba(15, 36, 74, 0.08);
+  --radius: 16px;
+}
+
+html,
+body,
+[data-testid="stAppViewContainer"] {
+  background: radial-gradient(120% 120% at 0% 0%, #f7f9fd 0%, var(--bg) 65%);
+  color: var(--ink);
+}
+
+[data-testid="stAppViewContainer"] > .main > div.block-container {
+  max-width: 1280px;
+  padding-top: 1.2rem;
+  padding-bottom: 2rem;
+  padding-left: 2rem;
+  padding-right: 2rem;
+}
+
+[data-testid="stMetric"] {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  background: var(--panel);
+  padding: 0.6rem 0.8rem;
+}
+
+.kpi-card {
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  background: var(--panel);
+  box-shadow: var(--shadow);
+  padding: 1rem 1.1rem;
+}
