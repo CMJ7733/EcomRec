@@ -38,11 +38,20 @@ def _add_price_outlier_alert(train: pl.DataFrame, alerts: list[dict[str, str]]) 
     if len(price) == 0:
         return
 
-    p99 = price.quantile(0.99)
-    if p99 is None:
+    q1 = price.quantile(0.25)
+    q3 = price.quantile(0.75)
+    if q1 is None or q3 is None:
         return
 
-    threshold = float(p99) * 3.0
+    iqr = float(q3) - float(q1)
+    if iqr > 0:
+        threshold = float(q3) + 3.0 * iqr
+    else:
+        p99 = price.quantile(0.99)
+        if p99 is None:
+            return
+        threshold = float(p99) * 3.0
+
     outlier_count = int((price > threshold).sum())
     outlier_ratio = float(outlier_count / len(price))
 
@@ -51,6 +60,52 @@ def _add_price_outlier_alert(train: pl.DataFrame, alerts: list[dict[str, str]]) 
             {
                 "level": "P1",
                 "message": f"价格异常值占比偏高: {outlier_ratio:.2%}",
+            }
+        )
+
+
+def _add_time_leakage_alert(
+    train: pl.DataFrame,
+    valid: pl.DataFrame,
+    alerts: list[dict[str, str]],
+) -> None:
+    """检测时间切分泄露；若有 user_id 则按用户检查，否则退化为全局检查。"""
+    if "timestamp_sec" not in train.columns or "timestamp_sec" not in valid.columns:
+        return
+
+    if "user_id" in train.columns and "user_id" in valid.columns:
+        train_user_ts = (
+            train.select(["user_id", "timestamp_sec"])
+            .drop_nulls()
+            .group_by("user_id")
+            .agg(pl.col("timestamp_sec").max().alias("train_max_ts"))
+        )
+        valid_user_ts = (
+            valid.select(["user_id", "timestamp_sec"])
+            .drop_nulls()
+            .group_by("user_id")
+            .agg(pl.col("timestamp_sec").min().alias("valid_min_ts"))
+        )
+
+        overlap = train_user_ts.join(valid_user_ts, on="user_id", how="inner")
+        if len(overlap) > 0:
+            leaked = overlap.filter(pl.col("valid_min_ts") <= pl.col("train_max_ts"))
+            if len(leaked) > 0:
+                alerts.append(
+                    {
+                        "level": "P0",
+                        "message": "时间切分异常：存在用户的 valid 时间早于或等于 train 末尾时间。",
+                    }
+                )
+        return
+
+    train_ts = train["timestamp_sec"].drop_nulls()
+    valid_ts = valid["timestamp_sec"].drop_nulls()
+    if len(train_ts) > 0 and len(valid_ts) > 0 and valid_ts.min() <= train_ts.max():
+        alerts.append(
+            {
+                "level": "P0",
+                "message": "时间切分异常：valid 起始时间不应早于或等于 train 结束时间。",
             }
         )
 
@@ -96,16 +151,7 @@ def run_quality_checks(
     alerts: list[dict[str, str]] = []
     profiles: dict[str, dict[str, float | None]] = {}
 
-    if "timestamp_sec" in train.columns and "timestamp_sec" in valid.columns:
-        train_ts = train["timestamp_sec"].drop_nulls()
-        valid_ts = valid["timestamp_sec"].drop_nulls()
-        if len(train_ts) > 0 and len(valid_ts) > 0 and valid_ts.min() <= train_ts.max():
-            alerts.append(
-                {
-                    "level": "P0",
-                    "message": "时间切分异常：valid 起始时间不应早于或等于 train 结束时间。",
-                }
-            )
+    _add_time_leakage_alert(train, valid, alerts)
 
     _add_price_outlier_alert(train, alerts)
 
