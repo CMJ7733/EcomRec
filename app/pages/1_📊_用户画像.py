@@ -12,7 +12,7 @@ import numpy as np
 
 st.set_page_config(page_title="用户画像", page_icon="📊", layout="wide")
 st.title("📊 用户画像分析")
-st.markdown("基于 **RFM 模型**的 KMeans 聚类，识别高价值/潜力/沉睡/流失四类用户群体。")
+st.markdown("基于 **RFM 模型**的 KMeans 聚类，识别高价值/潜力/沉睡/流失四类用户群体。F/M 经 log1p 变换压缩长尾后聚类，分群更均衡。")
 
 PROCESSED = Path("data/processed")
 
@@ -47,7 +47,8 @@ st.divider()
 col_left, col_right = st.columns([1, 3])
 with col_left:
     selected_segs = st.multiselect("选择展示的用户群体", segments, default=segments)
-    k_slider = st.slider("Recency 截断天数（用于可视化）", 0, 365, 200)
+    max_recency = int(rfm_pd["recency_days"].max())
+    k_slider = st.slider("Recency 截断天数（用于可视化）", 0, max_recency, min(800, max_recency))
 
 filtered = rfm_pd[rfm_pd["user_segment"].isin(selected_segs)]
 filtered = filtered[filtered["recency_days"] <= k_slider]

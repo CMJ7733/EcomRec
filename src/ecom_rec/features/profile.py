@@ -54,6 +54,26 @@ def _label_clusters(rfm_with_cluster: pl.DataFrame, n_clusters: int) -> pl.DataF
     return rfm_with_cluster
 
 
+def _prepare_features(rfm: pl.DataFrame) -> np.ndarray:
+    """对 RFM 特征做 log1p 变换 + 标准化，返回用于聚类的数组。
+
+    frequency 和 monetary 服从重尾分布，直接 KMeans 会导致
+    极端尾部被单独划为一个极小簇。log1p 压缩长尾后簇边界更有业务意义。
+    recency_days 偏度较小且方向已对齐（越大越差），不做变换。
+    """
+    features = ["recency_days", "frequency", "monetary"]
+    X = rfm.select(features).to_numpy().astype(np.float64)
+
+    # 对 F、M 做 log1p 变换压缩长尾
+    X[:, 1] = np.log1p(X[:, 1])  # frequency
+    X[:, 2] = np.log1p(X[:, 2])  # monetary
+
+    # z-score 标准化
+    scaler = StandardScaler()
+    X_scaled = scaler.fit_transform(X)
+    return X_scaled
+
+
 def cluster_users(
     rfm: pl.DataFrame,
     n_clusters: int = 4,
@@ -70,12 +90,7 @@ def cluster_users(
     Returns:
         原 rfm DataFrame 追加 cluster_id 和 user_segment 列
     """
-    features = ["recency_days", "frequency", "monetary"]
-    X = rfm.select(features).to_numpy().astype(np.float64)
-
-    # 标准化
-    scaler = StandardScaler()
-    X_scaled = scaler.fit_transform(X)
+    X_scaled = _prepare_features(rfm)
 
     # KMeans 聚类
     kmeans = KMeans(n_clusters=n_clusters, random_state=random_state, n_init=10)
@@ -101,10 +116,7 @@ def cluster_users(
 
 def find_optimal_k(rfm: pl.DataFrame, k_range: range = range(2, 9)) -> list[float]:
     """使用肘部法则寻找最优 K 值，返回各 K 对应的 inertia"""
-    features = ["recency_days", "frequency", "monetary"]
-    X = rfm.select(features).to_numpy().astype(np.float64)
-    scaler = StandardScaler()
-    X_scaled = scaler.fit_transform(X)
+    X_scaled = _prepare_features(rfm)
     inertias = []
     for k in k_range:
         km = KMeans(n_clusters=k, random_state=42, n_init=10)

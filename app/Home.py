@@ -169,7 +169,7 @@ ARCH_HTML = """
 
 <div class="arch-layer" style="background:rgba(52,199,89,0.08);">
     <div class="arch-layer-title">👤 用户画像</div>
-    <div class="arch-layer-desc">RFM 建模 (Recency / Frequency / Monetary) → KMeans(k=4) → 4类群体画像</div>
+    <div class="arch-layer-desc">RFM 建模 (log1p 变换 + KMeans k=4) → 4类群体画像</div>
 </div>
 <div class="arch-arrow">↓</div>
 
@@ -238,7 +238,7 @@ st.divider()
 st.markdown("### 🧭 模块导航")
 nav1, nav2, nav3, nav4 = st.columns(4)
 with nav1:
-    st.info("📊 **用户画像**\n\nRFM 建模 + KMeans 聚类")
+    st.info("📊 **用户画像**\n\nRFM + log1p + KMeans 聚类")
 with nav2:
     st.info("🔍 **召回模型对比**\n\nTop-Pop / ItemCF / BPR / ALS")
 with nav3:
